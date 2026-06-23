@@ -20,7 +20,9 @@ of what is possible with the Autodesk platform and APIs. **THIS CODE IS NOT
 INTENDED FOR USE IN PRODUCTION.** Autodesk makes no representations,
 warranties, or commitments about the code. This code is not fully tested
 and may include errors or faults that may cause total data loss or system
-failure.
+failure. No further updates to this tool are promised or implied — the
+version published here may be the last, and may never be revised after the
+posting date.
 
 The MIT license applies to the source — see [LICENSE](LICENSE) — but the
 evaluation-only nature above takes precedence over any "use however you
@@ -109,4 +111,3 @@ Autodesk evaluation disclaimer.
 ## Acknowledgements
 
 Built against the **Revit 2026** and **Autodesk Fabrication MEP** APIs.
-Originally extracted from a larger internal add-in (PCF Exporter).
