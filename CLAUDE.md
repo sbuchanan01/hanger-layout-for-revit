@@ -1,15 +1,16 @@
 # Hanger Layout for Revit — Claude Code orientation
 
-This is a standalone Revit 2026 add-in extracted from a larger internal
-add-in. It places pipe and duct hangers along selected Autodesk Fabrication
-parts using user-defined size-banded spacing rules.
+This is a standalone Revit add-in (builds for Revit 2025 and Revit 2026
+from one source tree via `-p:RevitVersion=...`). It places pipe and duct
+hangers along selected Autodesk Fabrication parts using user-defined
+size-banded spacing rules.
 
 ## Project layout
 
 ```
 src/
-├── HangerLayout.csproj            ← .NET 8 + Revit 2026 refs, AfterBuild deploy target
-├── HangerLayout.addin             ← Revit add-in manifest (drops into Addins\2026\)
+├── HangerLayout.csproj            ← .NET 8 + Revit refs (RevitVersion-parameterized, defaults 2026), AfterBuild deploy target
+├── HangerLayout.addin             ← Revit add-in manifest (drops into Addins\<version>\ matching build)
 ├── HangerLayoutApp.cs             ← IExternalApplication: ribbon tab + ExternalEvent registration
 ├── HangerLayoutCommand.cs         ← IExternalCommand: opens the dialog
 ├── Models/
@@ -39,18 +40,24 @@ docs/                              ← User-facing + developer documentation
 
 ```
 cd src
-dotnet build -c Debug
+dotnet build -c Debug                       # default = Revit 2026
+dotnet build -c Debug -p:RevitVersion=2025  # Revit 2025
 ```
 
 Debug builds auto-deploy `HangerLayout.dll` + `HangerLayout.addin` to
-`%APPDATA%\Autodesk\Revit\Addins\2026\`. If Revit is open, the DLL is
-locked — close Revit and rebuild, or skip the deploy step and copy manually.
+`%APPDATA%\Autodesk\Revit\Addins\<RevitVersion>\`. Output goes into
+`bin/Debug-Revit<RevitVersion>/` so the two builds don't overwrite
+each other. A `REVIT<version>` compile-time symbol (e.g. `REVIT2026`)
+is also defined for any source that needs to branch on the API.
 
-Override the Revit install path at the command line if your install isn't
-the default:
+If Revit is open, the DLL is locked — close Revit and rebuild, or skip
+the deploy step and copy manually.
+
+Override the Revit install path at the command line if your install
+isn't the default:
 
 ```
-dotnet build -c Debug /p:RevitInstallPath="D:\Revit 2026"
+dotnet build -c Debug -p:RevitInstallPath="D:\Revit 2026"
 ```
 
 ## Critical Revit API gotchas

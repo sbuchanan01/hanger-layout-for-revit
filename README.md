@@ -1,8 +1,8 @@
 # Hanger Layout for Revit
 
-A Revit 2026 add-in that places pipe and duct hangers along selected runs of
-**Autodesk Fabrication parts**, using size-banded spacing rules you define
-once and reuse across the project.
+A Revit add-in (builds for **Revit 2025** and **Revit 2026**) that places
+pipe and duct hangers along selected runs of **Autodesk Fabrication parts**,
+using size-banded spacing rules you define once and reuse across the project.
 
 The dialog is modeless — you can pick parts in the model while it's open,
 edit your specifications inline, and apply them without closing the window.
@@ -50,13 +50,17 @@ like" reading of the MIT terms.
 
 ## Install (no compiling required)
 
-1. **Download the latest release ZIP** from
-   <https://github.com/sbuchanan01/hanger-layout-for-revit/releases>.
+1. **Download the ZIP that matches your Revit version** from
+   <https://github.com/sbuchanan01/hanger-layout-for-revit/releases>:
+   - `HangerLayout-Revit2025-v1.0.0.zip` for Revit 2025
+   - `HangerLayout-Revit2026-v1.0.0.zip` for Revit 2026
 2. Extract `HangerLayout.dll` and `HangerLayout.addin`.
-3. Drop **both files** into your Revit 2026 add-ins folder:
-   `%APPDATA%\Autodesk\Revit\Addins\2026\`
-   (paste that into File Explorer's address bar — it expands to your user
-   folder.)
+3. Drop **both files** into your version-matched Revit add-ins folder:
+   - Revit 2025 → `%APPDATA%\Autodesk\Revit\Addins\2025\`
+   - Revit 2026 → `%APPDATA%\Autodesk\Revit\Addins\2026\`
+
+   (paste either path into File Explorer's address bar — it expands to
+   your user folder.)
 4. Restart Revit. You'll see a new **Hanger Layout** ribbon tab.
 
 If Revit blocks the DLL on first launch with a security warning, right-click

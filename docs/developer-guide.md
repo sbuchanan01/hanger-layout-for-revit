@@ -7,8 +7,10 @@ How to set up your development environment, build, debug, and ship changes.
 ## Prerequisites
 
 - **Windows 10/11** — Revit only runs on Windows.
-- **Revit 2026** — full install. The add-in references DLLs from your
-  Revit install folder (default `C:\Program Files\Autodesk\Revit 2026\`).
+- **Revit 2025 or 2026** — full install. The add-in references DLLs
+  from your Revit install folder (default
+  `C:\Program Files\Autodesk\Revit <version>\`). Build defaults to
+  Revit 2026; pass `-p:RevitVersion=2025` to target 2025 instead.
 - **.NET 8 SDK** — [download](https://dotnet.microsoft.com/download).
   The csproj targets `net8.0-windows`.
 - **A C# IDE** (any will do):
@@ -38,15 +40,28 @@ Time Elapsed 00:00:04.xx
 (Some `MSB3277` warnings about RevitAPIUI re-references are normal and
 harmless.)
 
-Debug builds auto-deploy to `%APPDATA%\Autodesk\Revit\Addins\2026\` via the
-`DeployToRevitAddins` MSBuild target. **If Revit is open, the DLL is
-locked** — the copy step is skipped (the build itself still succeeds).
+Debug builds auto-deploy to `%APPDATA%\Autodesk\Revit\Addins\<version>\`
+via the `DeployToRevitAddins` MSBuild target — the `<version>` matches
+whatever `-p:RevitVersion=...` you passed (default 2026). **If Revit is
+open, the DLL is locked** — the copy step is skipped (the build itself
+still succeeds).
 
 If your Revit is installed somewhere non-default:
 
 ```powershell
-dotnet build -c Debug /p:RevitInstallPath="D:\Revit 2026"
+dotnet build -c Debug -p:RevitInstallPath="D:\Revit 2026"
 ```
+
+To build for **both** Revit 2025 and 2026 in one go (typical for
+releases):
+
+```powershell
+dotnet build -c Release -p:RevitVersion=2025
+dotnet build -c Release -p:RevitVersion=2026
+```
+
+Outputs land in `bin/Release-Revit2025/` and `bin/Release-Revit2026/`
+respectively.
 
 ---
 
@@ -69,7 +84,7 @@ workflow is:
 1. Open the csproj in Visual Studio.
 2. Open **Properties** on the project → Debug → "Launch Profile" → set the
    executable to your Revit binary
-   (`C:\Program Files\Autodesk\Revit 2026\Revit.exe`).
+   (`C:\Program Files\Autodesk\Revit <version>\Revit.exe`).
 3. Hit F5 — Visual Studio starts Revit with the debugger attached.
 4. Set breakpoints in HangerLayout source; they hit when the relevant code
    path runs in Revit.
