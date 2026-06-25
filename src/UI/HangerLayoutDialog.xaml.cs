@@ -470,9 +470,9 @@ namespace HangerLayout.UI
             HangerLayoutApp.HangerHandler!.SetAction(uiApp =>
             {
                 List<ElementId> picked = new();
+                var uiDoc = uiApp.ActiveUIDocument;
                 try
                 {
-                    var uiDoc = uiApp.ActiveUIDocument;
                     var refs = uiDoc.Selection.PickObjects(
                         ObjectType.Element,
                         new FabricationPipeOrDuctFilter(),
@@ -487,12 +487,22 @@ namespace HangerLayout.UI
                 }
                 finally
                 {
+                    // Union the new picks with whatever was already in
+                    // ViewModel.PickedElementIds so successive Pick / Pick
+                    // Run sessions accumulate. The Clear button wipes the
+                    // accumulator when the user wants to start fresh.
+                    List<ElementId>? union = null;
+                    if (picked.Count > 0)
+                    {
+                        union = UnionWithExistingPicks(picked);
+                        try { uiDoc.Selection.SetElementIds(union); } catch { }
+                    }
                     Dispatcher.Invoke(() =>
                     {
-                        if (picked.Count > 0)
+                        if (union != null)
                         {
-                            ViewModel.PickedElementIds = picked;
-                            ViewModel.StatusText = $"Picked {picked.Count} element(s).";
+                            ViewModel.PickedElementIds = union;
+                            ViewModel.StatusText = $"{union.Count} element(s) picked.";
                             RefreshTargetCategories();
                         }
                         Show();
@@ -500,6 +510,136 @@ namespace HangerLayout.UI
                 }
             });
             HangerLayoutApp.HangerEvent!.Raise();
+        }
+
+        // ── Pick Run (single pick, expand to connected fabrication chain) ────
+        //
+        // PickObjects' Tab key cycles overlapping elements, not "select
+        // connected" — that's a modify-mode feature of the standard Revit
+        // cursor, NOT exposed through the pick API. We get the same effect
+        // here by post-processing: take whatever the user picks, then BFS
+        // the connector graph to add every reachable FabricationPart. Ctrl-
+        // clicking multiple parts unions their runs naturally because each
+        // pick's expansion adds to the same accumulator.
+
+        private void PickRun_Click(object sender, RoutedEventArgs e)
+        {
+            Hide();
+            HangerLayoutApp.HangerHandler!.SetAction(uiApp =>
+            {
+                List<ElementId> expanded = new();
+                var uiDoc = uiApp.ActiveUIDocument;
+                try
+                {
+                    var doc  = uiDoc.Document;
+                    var refs = uiDoc.Selection.PickObjects(
+                        ObjectType.Element,
+                        new FabricationPipeOrDuctFilter(),
+                        "Pick one element from each run. The whole connected run will be included. Press Finish or Esc when done.");
+
+                    var seen = new HashSet<long>();
+                    foreach (var r in refs)
+                    {
+                        if (doc.GetElement(r.ElementId) is not FabricationPart seed)
+                        {
+                            seen.Add(r.ElementId.Value);
+                            expanded.Add(r.ElementId);
+                            continue;
+                        }
+                        ExpandConnectedRun(doc, seed, seen, expanded);
+                    }
+                }
+                catch (Autodesk.Revit.Exceptions.OperationCanceledException) { }
+                catch (Exception ex)
+                {
+                    Dispatcher.Invoke(() =>
+                        ViewModel.StatusText = $"Pick failed: {ex.Message}");
+                }
+                finally
+                {
+                    // Union the expansion with whatever was already in
+                    // ViewModel.PickedElementIds so successive Pick / Pick
+                    // Run sessions accumulate. Cyan-highlight the cumulative
+                    // set in Revit for visual verification.
+                    List<ElementId>? union = null;
+                    if (expanded.Count > 0)
+                    {
+                        union = UnionWithExistingPicks(expanded);
+                        try { uiDoc.Selection.SetElementIds(union); } catch { }
+                    }
+                    Dispatcher.Invoke(() =>
+                    {
+                        if (union != null)
+                        {
+                            ViewModel.PickedElementIds = union;
+                            ViewModel.StatusText = $"{union.Count} element(s) picked across run(s).";
+                            RefreshTargetCategories();
+                        }
+                        Show();
+                    });
+                }
+            });
+            HangerLayoutApp.HangerEvent!.Raise();
+        }
+
+        // Returns the existing PickedElementIds union'd with newPicks, with
+        // duplicates removed (compares by ElementId.Value). Stable order:
+        // existing items first in their original order, then any new items.
+        private List<ElementId> UnionWithExistingPicks(List<ElementId> newPicks)
+        {
+            var existing = ViewModel.PickedElementIds ?? new List<ElementId>();
+            var seen = new HashSet<long>(existing.Count + newPicks.Count);
+            var result = new List<ElementId>(existing.Count + newPicks.Count);
+            foreach (var id in existing)
+            {
+                if (seen.Add(id.Value)) result.Add(id);
+            }
+            foreach (var id in newPicks)
+            {
+                if (seen.Add(id.Value)) result.Add(id);
+            }
+            return result;
+        }
+
+        // Discards the accumulated pick set so the next Pick / Pick Run
+        // starts fresh. Doesn't touch Revit's actual selection — the user
+        // can deselect in Revit themselves.
+        private void ClearPicks_Click(object sender, RoutedEventArgs e)
+        {
+            ViewModel.PickedElementIds = new List<ElementId>();
+            ViewModel.StatusText = "Picks cleared.";
+            RefreshTargetCategories();
+        }
+
+        // BFS over the connector graph starting at `seed`, collecting every
+        // reachable FabricationPart into `accumulator`. `visited` is a shared
+        // long-id set so consecutive Pick Run calls (or ctrl-clicks within
+        // one call) don't double-count the same part.
+        private static void ExpandConnectedRun(
+            Document doc, FabricationPart seed,
+            HashSet<long> visited, List<ElementId> accumulator)
+        {
+            var queue = new Queue<FabricationPart>();
+            queue.Enqueue(seed);
+            while (queue.Count > 0)
+            {
+                var current = queue.Dequeue();
+                if (!visited.Add(current.Id.Value)) continue;
+                accumulator.Add(current.Id);
+
+                var conns = ConnectorHelper.GetPhysicalConnectors(current);
+                foreach (var conn in conns)
+                {
+                    foreach (Connector other in conn.AllRefs)
+                    {
+                        if (other?.Owner is FabricationPart neighbor
+                            && !visited.Contains(neighbor.Id.Value))
+                        {
+                            queue.Enqueue(neighbor);
+                        }
+                    }
+                }
+            }
         }
 
         // ── Refresh service dropdown ─────────────────────────────────────────

@@ -183,13 +183,27 @@ ctrl-click, Tab-cycle) without closing the dialog. If nothing is
 selected when you Apply, the status line tells you so and nothing is
 placed.
 
-**Pick elements** — click the **Pick…** button next to this radio. The
-dialog hides itself while you pick parts using the standard Revit
-element-picker (single-click, ctrl-click for multiple, Esc to finish).
-When you finish picking, the dialog reappears and remembers the picked
-set. The picked set replaces whatever was previously chosen, so you can
-build it up across multiple Pick… clicks only by ctrl-picking within a
-single picking session.
+**Pick elements** — three buttons next to this radio: **Pick…**, **Pick
+Run…**, and **Clear**. The dialog hides itself while you pick; when
+you finish, it reappears with the picks **highlighted in cyan in the
+model** so you can verify before hitting Apply.
+
+- **Pick…** — standard Revit picker. Single-click, ctrl-click to add,
+  window-drag to select multiple. Hit Finish (or Esc) to commit.
+- **Pick Run…** — pick one element from a run; the dialog automatically
+  expands the selection to **every fabrication part connected to it
+  through the run** (walks the connector graph across fittings,
+  valves, couplings, etc.). Use ctrl-click in one pick session to grab
+  multiple separate runs at once. Functionally equivalent to Revit's
+  "Tab to select connected elements" behavior, applied per click.
+- **Clear** — wipes the accumulated picks so the next Pick / Pick Run
+  starts fresh.
+
+Both Pick buttons **accumulate** — picking another set after a first
+pick session adds to whatever's already there, rather than replacing
+it. Useful when you want to pick a run, then add a few more loose
+parts, then maybe another run, in separate clicks. The cyan highlight
+in the model always shows the cumulative set.
 
 **All in service** — the placer pulls every fabrication part whose
 Service matches the one chosen in the adjacent dropdown. Useful when

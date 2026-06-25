@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="clr-namespace:HangerLayout.UI"
         Title="Hanger Layout"
-        Width="900" Height="700"
+        Width="900" Height="750"
         ResizeMode="CanResize"
         MinWidth="820" MinHeight="420"
         WindowStartupLocation="CenterScreen"
@@ -345,7 +345,18 @@
                                  IsChecked="{Binding IsModePick}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                     <Button Style="{StaticResource SecondaryButton}" Content="Pick…"
                             Click="PickElements_Click" Padding="10,4"
-                            IsEnabled="{Binding IsModePick}"/>
+                            IsEnabled="{Binding IsModePick}"
+                            Margin="0,0,4,0"
+                            ToolTip="Standard pick: click single elements, ctrl-click to add, or window-drag to select multiple. Adds to whatever is already picked — hit Clear to start over."/>
+                    <Button Style="{StaticResource SecondaryButton}" Content="Pick Run…"
+                            Click="PickRun_Click" Padding="10,4"
+                            IsEnabled="{Binding IsModePick}"
+                            Margin="0,0,4,0"
+                            ToolTip="Pick one element, then the placer expands the selection to every fabrication part connected to it through the same run. Ctrl-click multiple times within one pick session to add more runs; or hit Pick / Pick Run again afterwards to keep adding."/>
+                    <Button Style="{StaticResource SecondaryButton}" Content="Clear"
+                            Click="ClearPicks_Click" Padding="10,4"
+                            IsEnabled="{Binding IsModePick}"
+                            ToolTip="Discard the current picked set so the next Pick / Pick Run starts fresh."/>
                 </StackPanel>
 
                 <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,4">
