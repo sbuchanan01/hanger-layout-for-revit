@@ -401,14 +401,23 @@
                             ToolTip="Re-detect Pipe / Round duct / Rect duct in the current target set."/>
                 </StackPanel>
 
-                <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,4,0,0">
-                    <TextBlock Style="{StaticResource Lbl}" Text="Starting Node:"/>
-                    <Button Style="{StaticResource SecondaryButton}" Content="Pick…"
-                            Click="PickStart_Click" Padding="10,4" Margin="0,0,4,0"/>
-                    <Button Style="{StaticResource SecondaryButton}" Content="Clear"
-                            Click="ClearStart_Click" Padding="10,4" Margin="0,0,8,0"/>
-                    <TextBlock Text="{Binding StartElementText}"
-                               Style="{StaticResource Lbl}" Foreground="#666666"/>
+                <StackPanel Grid.Row="3" Orientation="Vertical" Margin="0,6,0,0">
+                    <TextBlock Text="Starting Node Selection"
+                               FontWeight="SemiBold" Margin="0,0,0,4"/>
+                    <StackPanel Orientation="Horizontal" Margin="20,0,0,4">
+                        <TextBlock Style="{StaticResource Lbl}" Text="Starting Node:"/>
+                        <Button Style="{StaticResource SecondaryButton}" Content="Pick…"
+                                Click="PickStart_Click" Padding="10,4" Margin="0,0,4,0"/>
+                        <Button Style="{StaticResource SecondaryButton}" Content="Clear"
+                                Click="ClearStart_Click" Padding="10,4" Margin="0,0,8,0"/>
+                        <TextBlock Text="{Binding StartElementText}"
+                                   Style="{StaticResource Lbl}" Foreground="#666666"/>
+                    </StackPanel>
+                    <CheckBox Content="Use Mechanical Equipment as Start (recommended for multiple runs)"
+                              IsChecked="{Binding UseMechEqAsStart}"
+                              VerticalAlignment="Center"
+                              Margin="20,0,0,0"
+                              ToolTip="When checked, the placer auto-orients each chain so the end closest (via connector connectivity) to a Mechanical Equipment family instance is the start side. Useful for batch placement across many runs where picking a Start Node per chain isn't practical. Falls back to the auto behavior on any chain that doesn't reach Mechanical Equipment within a reasonable hop count. An explicit Start Node pick still wins."/>
                 </StackPanel>
 
                 <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,4,0,0">

@@ -226,16 +226,50 @@ modes or selections.
 
 ![Three spec dropdowns](screenshots/13-spec-dropdowns.png)
 
-### 3. Pick a Start Node
+### 3. Starting Node Selection
 
-Since we are, at times, placing before and/or after fittings, we need to
-determine which side of the run determines the start. Click **Pick…**
-next to **Starting Node**, then click on the part at the end you want
-to start from. The flow-map orients the chain to that side.
+Because the placer can put setbacks before *and* after fittings, it
+needs to know which end of a run is "the start" — that's how it knows
+which side gets the clean start of the spacing rhythm and which side
+absorbs any leftover slack at the end.
 
-![Start Node picker](screenshots/14-start-node.png)
+There are two ways to tell it:
 
-Without a Start Node, the placer picks an end automatically.
+![Starting Node Selection group](screenshots/14-start-node.png)
+
+**Manual: Pick…** — click **Pick…** next to **Starting Node**, then
+click on the part at the end of one run you want to start from. The
+flow-map orients that chain to that side. Use **Clear** to remove.
+This is the most precise — wins over the auto rule below if both are
+set — but it only applies to chains the picked element belongs to.
+For a single run, this is the simplest control.
+
+**Automatic: Use Mechanical Equipment as Start** — when checked, the
+placer walks outward from each chain's endpoints through the connector
+graph (across fittings, valves, transitions, up to a sensible hop
+limit) looking for a Mechanical Equipment family instance. Whichever
+end reaches one first becomes the start. This is the **recommended
+default for multiple runs at once** — pick a service (or window-select
+a bunch of risers), turn this on, and every chain self-orients from
+its source equipment without you picking one Start Node per chain.
+
+A few notes on the auto rule:
+
+- "Mechanical Equipment" means the Revit category — pumps, boilers,
+  AHUs, RTUs, chillers, tanks. Not plumbing fixtures or air terminals.
+- Chains that **don't** reach a Mech Eq within range silently fall
+  back to the "placer picks an end automatically" behavior.
+- Chains where **both** endpoints reach Mech Eq at the same distance
+  (equipment-to-equipment runs of similar length) also fall back to
+  auto — better than silently picking one arbitrarily.
+- The setting persists across Apply runs and sessions.
+- After Apply, the status line reports the breakdown — e.g.
+  *"Chains oriented: 8 from Mech Eq, 2 from Start Node, 1 auto"* —
+  so you can verify the rule fired where you expected.
+
+Use a manual Start Node pick when you want to override per-Apply.
+The two work together: Start Node wins for the run it touches; Mech
+Eq handles every other chain.
 
 ### 4. Attach hangers to structure
 

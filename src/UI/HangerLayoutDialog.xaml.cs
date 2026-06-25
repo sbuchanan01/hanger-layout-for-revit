@@ -52,6 +52,7 @@ namespace HangerLayout.UI
                 var ps = HangerSettingsStore.GetPlacementSettings(uiDoc.Document);
                 ViewModel.MinSpacingEnabled = ps.MinSpacingEnabled;
                 ViewModel.MinSpacingInches  = ps.MinSpacingInches;
+                ViewModel.UseMechEqAsStart  = ps.UseMechEqAsStart;
             }
             catch { /* defaults stand */ }
 
@@ -858,6 +859,7 @@ namespace HangerLayout.UI
             double     minSpacingFt   = ViewModel.MinSpacingEnabled
                                        ? Math.Max(0.0, ViewModel.MinSpacingInches / 12.0)
                                        : 0.0;
+            bool       useMechEqStart = ViewModel.UseMechEqAsStart;
 
             HangerLayoutApp.HangerHandler!.SetAction(uiApp =>
             {
@@ -903,6 +905,7 @@ namespace HangerLayout.UI
                     {
                         MinSpacingEnabled = ViewModel.MinSpacingEnabled,
                         MinSpacingInches  = ViewModel.MinSpacingInches,
+                        UseMechEqAsStart  = ViewModel.UseMechEqAsStart,
                     });
 
                     // Delete existing hangers hosted on the target pipes/ducts
@@ -1027,11 +1030,11 @@ namespace HangerLayout.UI
                             $"StraightJoints={rectDuctSpec.StraightJoints}");
 
                     if (pipeSpec != null && pipes.Count > 0)
-                        HangerPlacer.Place(doc, pipes, pipeSpec, outcome, flowMap, attachToStruct, minSpacingFt);
+                        HangerPlacer.Place(doc, pipes, pipeSpec, outcome, flowMap, attachToStruct, minSpacingFt, useMechEqStart);
                     if (roundDuctSpec != null && roundDucts.Count > 0)
-                        HangerPlacer.Place(doc, roundDucts, roundDuctSpec, outcome, flowMap, attachToStruct, minSpacingFt);
+                        HangerPlacer.Place(doc, roundDucts, roundDuctSpec, outcome, flowMap, attachToStruct, minSpacingFt, useMechEqStart);
                     if (rectDuctSpec != null && rectDucts.Count > 0)
-                        HangerPlacer.Place(doc, rectDucts, rectDuctSpec, outcome, flowMap, attachToStruct, minSpacingFt);
+                        HangerPlacer.Place(doc, rectDucts, rectDuctSpec, outcome, flowMap, attachToStruct, minSpacingFt, useMechEqStart);
 
                     tx.Commit();
                 }
@@ -1246,8 +1249,21 @@ namespace HangerLayout.UI
             string baseLine =
                 $"Placed {o.Placed} hanger(s) on {nPipes} pipe(s) and {nDucts} duct(s). " +
                 $"Skipped: {o.SkippedShort} too-short, {o.SkippedNoSpec} no-spec, " +
-                $"{o.SkippedNoButton} no-hanger-button, {o.CreateFailed} create-failed. " +
-                (o.OversizeBand > 0 ? $"{o.OversizeBand} part(s) exceeded all size bands (used largest)." : "");
+                $"{o.SkippedNoButton} no-hanger-button, {o.CreateFailed} create-failed" +
+                (o.SkippedTooClose > 0 ? $", {o.SkippedTooClose} too-close" : "") + ". " +
+                (o.OversizeBand > 0 ? $"{o.OversizeBand} part(s) exceeded all size bands (used largest). " : "");
+
+            // Per-chain orientation tally — only show if any multi-segment
+            // chains were processed (single-segment "chains" don't contribute).
+            int chainTotal = o.ChainsOrientedByStartNode + o.ChainsOrientedByMechEq + o.ChainsOrientedAuto;
+            if (chainTotal > 0)
+            {
+                var parts = new List<string>();
+                if (o.ChainsOrientedByStartNode > 0) parts.Add($"{o.ChainsOrientedByStartNode} from Start Node");
+                if (o.ChainsOrientedByMechEq    > 0) parts.Add($"{o.ChainsOrientedByMechEq} from Mech Eq");
+                if (o.ChainsOrientedAuto        > 0) parts.Add($"{o.ChainsOrientedAuto} auto");
+                baseLine += $"Chains oriented: {string.Join(", ", parts)}. ";
+            }
 
             if (o.Notes.Count == 0) return baseLine;
 
@@ -1591,6 +1607,18 @@ namespace HangerLayout.UI
         {
             get => _minSpacingInches;
             set => SetField(ref _minSpacingInches, value);
+        }
+
+        // When true, the placer auto-orients each chain so the end closest
+        // (via connector connectivity) to a Mechanical Equipment family
+        // instance becomes the start side. Falls back to the existing auto
+        // behavior when no equipment is reachable within the hop limit.
+        // An explicit Start Node pick still wins on a per-Apply basis.
+        private bool _useMechEqAsStart;
+        public bool UseMechEqAsStart
+        {
+            get => _useMechEqAsStart;
+            set => SetField(ref _useMechEqAsStart, value);
         }
 
         // ── Target-category presence (drives Pipe/Duct spec dropdown visibility) ──

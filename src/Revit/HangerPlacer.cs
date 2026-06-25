@@ -47,6 +47,11 @@ namespace HangerLayout.Revit
             public int SkippedTooClose{ get; set; }
             public int OversizeBand   { get; set; }
             public int CreateFailed   { get; set; }
+            // Per-chain orientation tally (multi-segment chains only;
+            // single-segment "chains" don't contribute).
+            public int ChainsOrientedByStartNode { get; set; }
+            public int ChainsOrientedByMechEq    { get; set; }
+            public int ChainsOrientedAuto        { get; set; }
             public bool DumpedDiagnostics { get; set; }
             public List<ElementId> CreatedIds { get; } = new();
             public List<string> Notes { get; } = new();
@@ -64,7 +69,8 @@ namespace HangerLayout.Revit
             Outcome outcome,
             HangerFlowMap? flowMap = null,
             bool attachToStructure = false,
-            double minSpacingFt = 0.0)
+            double minSpacingFt = 0.0,
+            bool useMechEqAsStart = false)
         {
             if (spec == null || spec.Rows == null || spec.Rows.Count == 0)
             {
@@ -102,7 +108,7 @@ namespace HangerLayout.Revit
                 try
                 {
                     ChainInfo chain = spanChains
-                        ? BuildChainInfo(doc, part, selectedIds, flowMap)
+                        ? BuildChainInfo(doc, part, selectedIds, flowMap, useMechEqAsStart, outcome)
                         : new ChainInfo();  // empty chain → fall through to per-segment
                     if (chain.Segments.Count > 1)
                     {
@@ -1414,9 +1420,25 @@ namespace HangerLayout.Revit
         /// (start-side) end. This keeps the algorithm's "step from the left"
         /// behaviour aligned with the user's start-of-run intent — and lands
         /// any sub-spacing remainder at the FAR end, not the near end.</summary>
+        /// <summary>Flip chain end-for-end: segment order, joint-gap order,
+        /// and per-segment LeftConn/RightConn swap. Pure mechanical reorientation.</summary>
+        private static void ReverseChainInPlace(ChainInfo info)
+        {
+            info.Segments.Reverse();
+            info.JointGapsFt.Reverse();
+            foreach (var seg in info.Segments)
+            {
+                var tmp = seg.LeftConn;
+                seg.LeftConn = seg.RightConn;
+                seg.RightConn = tmp;
+            }
+        }
+
         private static ChainInfo BuildChainInfo(
             Document doc, FabricationPart seed, HashSet<long> selectionIds,
-            HangerFlowMap? flowMap = null)
+            HangerFlowMap? flowMap = null,
+            bool useMechEqAsStart = false,
+            Outcome? outcome = null)
         {
             var info = new ChainInfo();
 
@@ -1457,28 +1479,60 @@ namespace HangerLayout.Revit
             }
             info.TotalLengthFt = info.Segments.Sum(s => s.LengthFt) + info.JointGapsFt.Sum();
 
-            // Orient: if flow map says the chain's current "left" end is
-            // actually the FAR side of the user's Start Node, reverse so the
-            // near side is at index 0. BuildPositions steps left-to-right and
-            // any sub-spacing remainder lands at the right (= far end), which
-            // matches the user's mental model of "start clean from where I
-            // picked, take the slack at the other end".
+            // Orient. Three sources of truth, in priority order:
+            //   1. User-picked Start Node (flow map)  — highest priority
+            //   2. Mechanical Equipment heuristic     — when enabled and Start Node didn't fire
+            //   3. Auto                               — fallback; chain stays as-walked
+            //
+            // BuildPositions steps left-to-right and any sub-spacing
+            // remainder lands at the right (= far end), so getting the
+            // start side at Segments[0] matters for ergonomics.
+            bool oriented = false;
             if (flowMap != null && info.Segments.Count > 1)
             {
                 var firstSeg = info.Segments[0];
-                if (flowMap.IsKnown(firstSeg.Part.Id) &&
-                    flowMap.IsFarEnd(firstSeg.Part.Id, firstSeg.LeftConn))
+                if (flowMap.IsKnown(firstSeg.Part.Id))
                 {
-                    info.Segments.Reverse();
-                    info.JointGapsFt.Reverse();
-                    foreach (var seg in info.Segments)
+                    oriented = true;
+                    if (flowMap.IsFarEnd(firstSeg.Part.Id, firstSeg.LeftConn))
+                        ReverseChainInPlace(info);
+                    if (outcome != null) outcome.ChainsOrientedByStartNode++;
+                }
+            }
+            if (!oriented && useMechEqAsStart && info.Segments.Count > 1)
+            {
+                var chainPartIds = new HashSet<long>(info.Segments.Select(s => s.Part.Id.Value));
+                int leftHops  = HangerFlowMap.HopsToMechanicalEquipment(
+                    info.Segments[0].LeftConn, chainPartIds);
+                int rightHops = HangerFlowMap.HopsToMechanicalEquipment(
+                    info.Segments[info.Segments.Count - 1].RightConn, chainPartIds);
+                bool leftFound  = leftHops  >= 0;
+                bool rightFound = rightHops >= 0;
+                if (leftFound || rightFound)
+                {
+                    oriented = true;
+                    // Prefer the side that reaches Mech Eq in fewer hops.
+                    // Ties between two equal-distance Mech Eq instances fall
+                    // through to auto — better than silently picking one.
+                    if (leftFound && (!rightFound || leftHops < rightHops))
                     {
-                        var tmp = seg.LeftConn;
-                        seg.LeftConn = seg.RightConn;
-                        seg.RightConn = tmp;
+                        // Mech Eq is on the left — already at Segments[0]; no flip.
+                        if (outcome != null) outcome.ChainsOrientedByMechEq++;
+                    }
+                    else if (rightFound && (!leftFound || rightHops < leftHops))
+                    {
+                        ReverseChainInPlace(info);
+                        if (outcome != null) outcome.ChainsOrientedByMechEq++;
+                    }
+                    else
+                    {
+                        // Tie — fall back to auto, don't claim Mech Eq.
+                        oriented = false;
                     }
                 }
             }
+            if (!oriented && info.Segments.Count > 1 && outcome != null)
+                outcome.ChainsOrientedAuto++;
             return info;
         }
 

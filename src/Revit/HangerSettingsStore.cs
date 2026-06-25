@@ -25,20 +25,26 @@ namespace HangerLayout.Revit
         private const string SchemaName = "HangerLayout_Settings";
         private const string FieldFabDbFolder = "FabricationDatabaseFolder";
 
-        // ── Placement settings (Schema B) ──────────────────────────────────
-        // Separate schema so adding new placement fields later doesn't risk
-        // colliding with Schema A in projects where Schema A is already
-        // saved with only its original field.
-        private static readonly Guid PlacementSchemaGuid =
+        // ── Placement settings ─────────────────────────────────────────────
+        // ExtensibleStorage schemas are immutable once any entity is written
+        // against them. To add a new field (e.g. UseMechEqAsStart in V2) we
+        // bump the GUID and migrate on read: V2 wins; if absent, fall back
+        // to V1 and copy its fields into the V2-shaped result. Writes always
+        // target V2.
+        private static readonly Guid PlacementSchemaV1Guid =
             new("9D5E1F3A-7C2B-4D8E-A91C-6B4F03DE82B7");
-        private const string PlacementSchemaName = "HangerLayout_PlacementSettings";
+        private static readonly Guid PlacementSchemaGuid =
+            new("AC4E2B5F-8D3C-4E9A-B12D-7C5E14EF93C8");
+        private const string PlacementSchemaName = "HangerLayout_PlacementSettings_V2";
         private const string FieldMinSpacingEnabled = "MinSpacingEnabled";
         private const string FieldMinSpacingInches  = "MinSpacingInches";
+        private const string FieldUseMechEqAsStart  = "UseMechEqAsStart";
 
         public sealed class PlacementSettings
         {
             public bool   MinSpacingEnabled { get; set; }
             public double MinSpacingInches  { get; set; } = 6.0;
+            public bool   UseMechEqAsStart  { get; set; }
         }
 
         public static string? GetFabricationDatabaseFolder(Document doc)
@@ -77,21 +83,45 @@ namespace HangerLayout.Revit
         // ── Placement settings (Schema B) ──────────────────────────────────
 
         /// <summary>Returns the saved placement settings, or fresh defaults
-        /// if none have been written yet.</summary>
+        /// if none have been written yet. V2 schema wins; falls back to V1
+        /// if the project was last written by an older add-in version.</summary>
         public static PlacementSettings GetPlacementSettings(Document doc)
         {
             var defaults = new PlacementSettings();
             try
             {
+                // V2 — current shape.
                 var schema = Schema.Lookup(PlacementSchemaGuid);
-                if (schema == null) return defaults;
-                var entity = doc.ProjectInformation.GetEntity(schema);
-                if (entity == null || !entity.IsValid()) return defaults;
-                return new PlacementSettings
+                if (schema != null)
                 {
-                    MinSpacingEnabled = entity.Get<bool>(schema.GetField(FieldMinSpacingEnabled)),
-                    MinSpacingInches  = entity.Get<double>(schema.GetField(FieldMinSpacingInches)),
-                };
+                    var entity = doc.ProjectInformation.GetEntity(schema);
+                    if (entity != null && entity.IsValid())
+                    {
+                        return new PlacementSettings
+                        {
+                            MinSpacingEnabled = entity.Get<bool>(schema.GetField(FieldMinSpacingEnabled)),
+                            MinSpacingInches  = entity.Get<double>(schema.GetField(FieldMinSpacingInches)),
+                            UseMechEqAsStart  = entity.Get<bool>(schema.GetField(FieldUseMechEqAsStart)),
+                        };
+                    }
+                }
+                // V1 fallback — only the two min-spacing fields; UseMechEq
+                // defaults to false. Next Apply writes V2.
+                var v1Schema = Schema.Lookup(PlacementSchemaV1Guid);
+                if (v1Schema != null)
+                {
+                    var v1Entity = doc.ProjectInformation.GetEntity(v1Schema);
+                    if (v1Entity != null && v1Entity.IsValid())
+                    {
+                        return new PlacementSettings
+                        {
+                            MinSpacingEnabled = v1Entity.Get<bool>(v1Schema.GetField(FieldMinSpacingEnabled)),
+                            MinSpacingInches  = v1Entity.Get<double>(v1Schema.GetField(FieldMinSpacingInches)),
+                            UseMechEqAsStart  = false,
+                        };
+                    }
+                }
+                return defaults;
             }
             catch { return defaults; }
         }
@@ -105,6 +135,7 @@ namespace HangerLayout.Revit
                 var entity = new Entity(schema);
                 entity.Set(schema.GetField(FieldMinSpacingEnabled), settings.MinSpacingEnabled);
                 entity.Set(schema.GetField(FieldMinSpacingInches),  settings.MinSpacingInches);
+                entity.Set(schema.GetField(FieldUseMechEqAsStart),  settings.UseMechEqAsStart);
                 doc.ProjectInformation.SetEntity(entity);
             }
             catch
@@ -145,6 +176,7 @@ namespace HangerLayout.Revit
             builder.SetWriteAccessLevel(AccessLevel.Public);
             builder.AddSimpleField(FieldMinSpacingEnabled, typeof(bool));
             builder.AddSimpleField(FieldMinSpacingInches,  typeof(double));
+            builder.AddSimpleField(FieldUseMechEqAsStart,  typeof(bool));
             return builder.Finish();
         }
     }

@@ -121,5 +121,86 @@ namespace HangerLayout.Revit
 
             return map;
         }
+
+        // ────────────────────────────────────────────────────────────────────
+        // Mechanical-Equipment-as-start finder
+        // ────────────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// BFS from <paramref name="startFromConn"/> through the connector
+        /// graph, counting hops to the nearest Mechanical Equipment
+        /// FamilyInstance. Elements in <paramref name="initialVisited"/> are
+        /// treated as already-seen (used by the caller to mask the chain's
+        /// own parts so we don't recurse back into ourselves).
+        ///
+        /// Returns the hop count when found, or -1 if no Mechanical Equipment
+        /// was reachable within <paramref name="hopLimit"/> hops.
+        ///
+        /// Used by HangerPlacer to decide which end of a multi-segment chain
+        /// is the "source" side when no explicit Start Node was picked and
+        /// the Use-Mechanical-Equipment-as-Start setting is on.
+        /// </summary>
+        public static int HopsToMechanicalEquipment(
+            Connector startFromConn,
+            HashSet<long> initialVisited,
+            int hopLimit = 30)
+        {
+            if (startFromConn == null) return -1;
+            var queue = new Queue<(Element elem, int hops)>();
+            var visited = new HashSet<long>(initialVisited);
+
+            foreach (Connector other in startFromConn.AllRefs)
+            {
+                var ownerElem = other.Owner;
+                if (ownerElem == null) continue;
+                long ownerId = ownerElem.Id.Value;
+                if (visited.Contains(ownerId)) continue;
+                visited.Add(ownerId);
+                queue.Enqueue((ownerElem, 1));
+            }
+
+            while (queue.Count > 0)
+            {
+                var (elem, hops) = queue.Dequeue();
+                if (hops > hopLimit) return -1;
+
+                if (IsMechanicalEquipment(elem))
+                    return hops;
+
+                var connMgr = GetConnectorManager(elem);
+                if (connMgr == null) continue;
+
+                foreach (Connector c in connMgr.Connectors)
+                {
+                    foreach (Connector nextRef in c.AllRefs)
+                    {
+                        var nextOwner = nextRef.Owner;
+                        if (nextOwner == null) continue;
+                        long nextId = nextOwner.Id.Value;
+                        if (visited.Contains(nextId)) continue;
+                        visited.Add(nextId);
+                        queue.Enqueue((nextOwner, hops + 1));
+                    }
+                }
+            }
+            return -1;
+        }
+
+        private static bool IsMechanicalEquipment(Element elem)
+        {
+            if (elem?.Category == null) return false;
+            return elem.Category.Id.Value == (long)BuiltInCategory.OST_MechanicalEquipment;
+        }
+
+        private static ConnectorManager? GetConnectorManager(Element elem)
+        {
+            return elem switch
+            {
+                FamilyInstance fi => fi.MEPModel?.ConnectorManager,
+                FabricationPart fp => fp.ConnectorManager,
+                MEPCurve mc => mc.ConnectorManager,
+                _ => null,
+            };
+        }
     }
 }
